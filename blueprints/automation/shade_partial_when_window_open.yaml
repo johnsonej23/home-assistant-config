@@ -1,5 +1,5 @@
 blueprint:
-  name: Keep cover partially open when any window is open
+  name: Keep shade partially open when any window is open
   description: >
     Prevents a selected cover from fully closing when ANY selected window sensors are open.
     Catches both close commands and a state backstop.
