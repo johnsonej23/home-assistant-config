@@ -40,6 +40,13 @@ blueprint:
 
 mode: restart
 
+# ✅ Make blueprint inputs usable inside Jinja templates
+variables:
+  target_cover: !input target_cover
+  window_sensors: !input window_sensors
+  partial_position: !input partial_position
+  settle_delay_seconds: !input settle_delay_seconds
+
 trigger:
   - platform: event
     id: cmd_close
@@ -61,24 +68,24 @@ trigger:
     to: "closed"
 
 condition:
-  # ANY window sensor open
+  # ANY window sensor open (assumes on=open)
   - condition: template
     value_template: >
-      {{ expand(!input window_sensors)
+      {{ expand(window_sensors)
          | selectattr('state','eq','on')
          | list | length > 0 }}
 
-  # Make sure the close command was intended for THIS cover
+  # Make sure the close command was intended for THIS cover and is a full-close.
+  # (State trigger bypasses this check.)
   - condition: template
     value_template: >
-      {% set cover = !input target_cover %}
       {% if trigger.id == 'state_closed' %}
         true
       {% else %}
         {% set svc = trigger.event.data.service %}
         {% set sd  = trigger.event.data.service_data %}
         {% set eid = sd.get('entity_id') %}
-        {% set targeted = (eid == cover) or (eid is iterable and cover in eid) %}
+        {% set targeted = (eid == target_cover) or (eid is iterable and target_cover in eid) %}
         {% set closing = (svc == 'close_cover') or (sd.get('position')|int == 0) %}
         {{ targeted and closing }}
       {% endif %}
