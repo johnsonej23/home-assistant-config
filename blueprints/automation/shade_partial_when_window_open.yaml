@@ -1,0 +1,94 @@
+blueprint:
+  name: Keep cover partially open when any window is open
+  description: >
+    Prevents a selected cover from fully closing when ANY selected window sensors are open.
+    Catches both close commands and a state backstop.
+  domain: automation
+  input:
+    target_cover:
+      name: Cover
+      selector:
+        entity:
+          domain: cover
+
+    window_sensors:
+      name: Window sensors (ANY open triggers)
+      selector:
+        entity:
+          domain: binary_sensor
+          multiple: true
+
+    partial_position:
+      name: Partial open position (%)
+      default: 20
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          mode: slider
+
+    settle_delay_seconds:
+      name: Delay before correcting (seconds)
+      default: 2
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 1
+          mode: slider
+
+mode: restart
+
+trigger:
+  - platform: event
+    id: cmd_close
+    event_type: call_service
+    event_data:
+      domain: cover
+      service: close_cover
+
+  - platform: event
+    id: cmd_setpos
+    event_type: call_service
+    event_data:
+      domain: cover
+      service: set_cover_position
+
+  - platform: state
+    id: state_closed
+    entity_id: !input target_cover
+    to: "closed"
+
+condition:
+  # ANY window sensor open
+  - condition: template
+    value_template: >
+      {{ expand(!input window_sensors)
+         | selectattr('state','eq','on')
+         | list | length > 0 }}
+
+  # Make sure the close command was intended for THIS cover
+  - condition: template
+    value_template: >
+      {% set cover = !input target_cover %}
+      {% if trigger.id == 'state_closed' %}
+        true
+      {% else %}
+        {% set svc = trigger.event.data.service %}
+        {% set sd  = trigger.event.data.service_data %}
+        {% set eid = sd.get('entity_id') %}
+        {% set targeted = (eid == cover) or (eid is iterable and cover in eid) %}
+        {% set closing = (svc == 'close_cover') or (sd.get('position')|int == 0) %}
+        {{ targeted and closing }}
+      {% endif %}
+
+action:
+  - delay:
+      seconds: !input settle_delay_seconds
+
+  - service: cover.set_cover_position
+    target:
+      entity_id: !input target_cover
+    data:
+      position: !input partial_position
